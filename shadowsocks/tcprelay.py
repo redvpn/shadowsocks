@@ -53,7 +53,8 @@ CMD_UDP_ASSOCIATE = 3
 # for each handler, it could be at one of several stages:
 
 # as sslocal:
-# stage 0 SOCKS hello received from local, send hello to local
+# stage 0 SOCKS hello received from local, send hello to local,
+#         and send auth header to remote
 # stage 1 addr received from local, query DNS for remote
 # stage 2 UDP assoc
 # stage 3 DNS resolved, connect to remote
@@ -61,7 +62,7 @@ CMD_UDP_ASSOCIATE = 3
 # stage 5 remote connected, piping local and remote
 
 # as ssserver:
-# stage 0 just jump to stage 1
+# stage 0 auth header received from local, set up encryptor
 # stage 1 addr received from local, query DNS for remote
 # stage 3 DNS resolved, connect to remote
 # stage 4 still connecting, more data from local received
@@ -108,9 +109,15 @@ class TCPRelayHandler(object):
         # if is_local, this is sslocal
         self._is_local = is_local
         self._stage = STAGE_INIT
-        self._encryptor = encrypt.Encryptor(config['password'],
-                                            config['method'])
+        self._encryptor = None
+        if is_local:
+            self._encryptor = encrypt.Encryptor(config['password'],
+                                                config['method'])
+        self._vendor_encryptor = encrypt.Encryptor(
+                self._config['vendor_password'],
+                self._config['method'])
         self._fastopen_connected = False
+        self._auth_header_buffer = b''
         self._data_to_write_to_local = []
         self._data_to_write_to_remote = []
         self._upstream_status = WAIT_STATUS_READING
@@ -403,6 +410,30 @@ class TCPRelayHandler(object):
         if not data:
             self.destroy()
             return
+        if not is_local and self._stage == STAGE_INIT:
+            self._auth_header_buffer += data
+            length = self._vendor_encryptor.iv_len() + 1 + 32;
+            if len(self._auth_header_buffer) < length:
+                return
+            auth_header = self._auth_header_buffer[:length]
+            auth_header = self._vendor_encryptor.decrypt(auth_header)
+            data = self._auth_header_buffer[length:]
+            self._auth_header_buffer = None
+            if auth_header[0] != '\x00':
+                logging.warn("unknown protocol version")
+                self.destroy()
+                return
+            password = self._config['userhash_password'].get(auth_header[1:])
+            if password is None:
+                logging.warn("unknown user/password paired")
+                self.destroy()
+                return
+            self._encryptor = encrypt.Encryptor(password,
+                                                self._config['method'])
+            self._stage = STAGE_ADDR
+            if not data:
+                return
+
         if not is_local:
             data = self._encryptor.decrypt(data)
             if not data:
@@ -413,14 +444,18 @@ class TCPRelayHandler(object):
             self._write_to_sock(data, self._remote_sock)
             return
         elif is_local and self._stage == STAGE_INIT:
+            auth_header = b'\x00' + self._config['userhash']
+            auth_header = self._vendor_encryptor.encrypt(auth_header)
+            self._data_to_write_to_remote.append(auth_header)
+            self._vendor_encryptor = None
+
             # TODO check auth method
             self._write_to_sock(b'\x05\00', self._local_sock)
             self._stage = STAGE_ADDR
             return
         elif self._stage == STAGE_CONNECTING:
             self._handle_stage_connecting(data)
-        elif (is_local and self._stage == STAGE_ADDR) or \
-                (not is_local and self._stage == STAGE_INIT):
+        elif self._stage == STAGE_ADDR:
             self._handle_stage_addr(data)
 
     def _on_remote_read(self):
