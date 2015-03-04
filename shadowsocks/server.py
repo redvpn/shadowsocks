@@ -48,6 +48,11 @@ def main():
         else:
             config['port_password'][str(server_port)] = config['password']
 
+    config['userhash_password'] = {}
+    for username, password in config['user_password'].items():
+        userhash = shell.hash_user(username, password)
+        config['userhash_password'][userhash] = password
+
     tcp_servers = []
     udp_servers = []
     dns_resolver = asyncdns.DNSResolver()

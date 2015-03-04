@@ -38,6 +38,8 @@ def main():
 
     config = shell.get_config(True)
 
+    config['userhash'] = shell.hash_user(config['username'], config['password'])
+
     daemon.daemon_exec(config)
 
     try:

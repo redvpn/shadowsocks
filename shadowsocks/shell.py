@@ -23,6 +23,7 @@ import json
 import sys
 import getopt
 import logging
+import hashlib
 from shadowsocks.common import to_bytes, to_str, IPNetwork
 from shadowsocks import encrypt
 
@@ -73,19 +74,38 @@ def find_config():
     return None
 
 
+def hash_user(username, password):
+    return hashlib.sha256(username + password).digest()
+
+
 def check_config(config, is_local):
     if config.get('daemon', None) == 'stop':
         # no need to specify configuration for daemon stop
         return
+
+    if is_local and not config.get('username', None):
+        logging.error('username not specified')
+        print_help(is_local)
+        sys.exit(2)
 
     if is_local and not config.get('password', None):
         logging.error('password not specified')
         print_help(is_local)
         sys.exit(2)
 
+    if is_local and not config.get('vendor_password', None):
+        logging.error('vendor password not specified')
+        print_help(is_local)
+        sys.exit(2)
+
     if not is_local and not config.get('password', None) \
             and not config.get('port_password', None):
         logging.error('password or port_password not specified')
+        print_help(is_local)
+        sys.exit(2)
+
+    if not is_local and not config.get('user_password', None):
+        logging.error('user_password not specified')
         print_help(is_local)
         sys.exit(2)
 
@@ -112,7 +132,8 @@ def check_config(config, is_local):
     if config.get('timeout', 300) > 600:
         logging.warn('warning: your timeout %d seems too long' %
                      int(config.get('timeout')))
-    if config.get('password') in [b'mypassword']:
+    if config.get('password') in [b'mypassword'] or \
+            config.get('vendor_password') in [b'vendorkey']:
         logging.error('DON\'T USE DEFAULT PASSWORD! Please change it in your '
                       'config.json!')
         sys.exit(1)
@@ -161,8 +182,12 @@ def get_config(is_local):
         for key, value in optlist:
             if key == '-p':
                 config['server_port'] = int(value)
+            elif key == '-u':
+                config['username'] = to_bytes(value)
             elif key == '-k':
                 config['password'] = to_bytes(value)
+            elif key == '-K':
+                config['vendor_password'] = to_bytes(value)
             elif key == '-l':
                 config['local_port'] = int(value)
             elif key == '-s':
@@ -213,9 +238,12 @@ def get_config(is_local):
         print_help(is_local)
         sys.exit(2)
 
+    config['username'] = config.get('username', b'')
     config['password'] = to_bytes(config.get('password', b''))
     config['method'] = to_str(config.get('method', 'aes-256-cfb'))
+    config['vendor_password'] = to_bytes(config.get('vendor_password', b''))
     config['port_password'] = config.get('port_password', None)
+    config['user_password'] = config.get('user_password', None)
     config['timeout'] = int(config.get('timeout', 300))
     config['fast_open'] = config.get('fast_open', False)
     config['workers'] = config.get('workers', 1)
