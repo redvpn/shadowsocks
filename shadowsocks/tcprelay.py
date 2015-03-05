@@ -95,7 +95,7 @@ BUF_SIZE = 32 * 1024
 
 
 class TCPRelayHandler(object):
-    def __init__(self, server, fd_to_handlers, loop, local_sock, config,
+    def __init__(self, server, fd_to_handlers, loop, local_sock, config, users,
                  dns_resolver, is_local):
         self._server = server
         self._fd_to_handlers = fd_to_handlers
@@ -103,6 +103,7 @@ class TCPRelayHandler(object):
         self._local_sock = local_sock
         self._remote_sock = None
         self._config = config
+        self._users = users
         self._dns_resolver = dns_resolver
 
         # TCP Relay works as either sslocal or ssserver
@@ -423,7 +424,7 @@ class TCPRelayHandler(object):
                 logging.warn("unknown protocol version")
                 self.destroy()
                 return
-            user = self._config['users'].get(auth_header[1:])
+            user = self._users.get(auth_header[1:])
             if user is None:
                 logging.warn("unknown user/password paired")
                 self.destroy()
@@ -585,8 +586,9 @@ class TCPRelayHandler(object):
 
 
 class TCPRelay(object):
-    def __init__(self, config, dns_resolver, is_local):
+    def __init__(self, config, users, dns_resolver, is_local):
         self._config = config
+        self._users = users
         self._is_local = is_local
         self._dns_resolver = dns_resolver
         self._closed = False
@@ -626,6 +628,9 @@ class TCPRelay(object):
                 self._config['fast_open'] = False
         server_socket.listen(1024)
         self._server_socket = server_socket
+
+    def set_users(self, users):
+        self._users = users
 
     def add_to_loop(self, loop):
         if self._eventloop:
@@ -709,7 +714,7 @@ class TCPRelay(object):
                     conn = self._server_socket.accept()
                     TCPRelayHandler(self, self._fd_to_handlers,
                                     self._eventloop, conn[0], self._config,
-                                    self._dns_resolver, self._is_local)
+                                    self._users, self._dns_resolver, self._is_local)
                 except (OSError, IOError) as e:
                     error_no = eventloop.errno_from_exception(e)
                     if error_no in (errno.EAGAIN, errno.EINPROGRESS,

@@ -48,7 +48,7 @@ def main():
         else:
             config['port_password'][str(server_port)] = config['password']
 
-    config['users'] = shell.get_user_dict(config['users-file'])
+    users = shell.get_user_dict(config['users-file'])
 
     tcp_servers = []
     udp_servers = []
@@ -59,7 +59,7 @@ def main():
         a_config['password'] = password
         logging.info("starting server at %s:%d" %
                      (a_config['server'], int(port)))
-        tcp_servers.append(tcprelay.TCPRelay(a_config, dns_resolver, False))
+        tcp_servers.append(tcprelay.TCPRelay(a_config, users, dns_resolver, False))
         udp_servers.append(udprelay.UDPRelay(a_config, dns_resolver, False))
 
     def run_server():
@@ -73,6 +73,12 @@ def main():
         def int_handler(signum, _):
             sys.exit(1)
         signal.signal(signal.SIGINT, int_handler)
+
+        def hup_handler(signum, _):
+            users = shell.get_user_dict(config['users-file'])
+            for tcp_server in tcp_servers:
+                tcp_server.set_users(users)
+        signal.signal(signal.SIGHUP, hup_handler)
 
         try:
             loop = eventloop.EventLoop()
