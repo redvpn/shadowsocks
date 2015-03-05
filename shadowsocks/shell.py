@@ -104,8 +104,8 @@ def check_config(config, is_local):
         print_help(is_local)
         sys.exit(2)
 
-    if not is_local and not config.get('user_password', None):
-        logging.error('user_password not specified')
+    if not is_local and not config.get('users-file', None):
+        logging.error('users-file not specified')
         print_help(is_local)
         sys.exit(2)
 
@@ -243,7 +243,7 @@ def get_config(is_local):
     config['method'] = to_str(config.get('method', 'aes-256-cfb'))
     config['vendor_password'] = to_bytes(config.get('vendor_password', b''))
     config['port_password'] = config.get('port_password', None)
-    config['user_password'] = config.get('user_password', None)
+    config['users-file'] = config.get('users-file', None)
     config['timeout'] = int(config.get('timeout', 300))
     config['fast_open'] = config.get('fast_open', False)
     config['workers'] = config.get('workers', 1)
@@ -290,6 +290,31 @@ def get_config(is_local):
     check_config(config, is_local)
 
     return config
+
+
+def get_user_dict(path):
+    logging.info('loading user list from %s' % path)
+    with open(path, 'rb') as f:
+        try:
+            userlist = json.loads(f.read().decode('utf8'),
+                                object_hook=_decode_dict)
+        except ValueError as e:
+            logging.error('found an error in users.json: %s',
+                          e.message)
+    users = {}
+    for user in userlist:
+        userhash = user.get('userhash')
+        if userhash is None:
+            userhash = hash_user(user['username'], user['password'])
+        try:
+            users[userhash] = {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'password': user['password']
+            }
+        except KeyError as e:
+            logging.warn('cannot load user: %s', e.message)
+    return users
 
 
 def print_help(is_local):

@@ -423,12 +423,12 @@ class TCPRelayHandler(object):
                 logging.warn("unknown protocol version")
                 self.destroy()
                 return
-            password = self._config['userhash_password'].get(auth_header[1:])
-            if password is None:
+            user = self._config['users'].get(auth_header[1:])
+            if user is None:
                 logging.warn("unknown user/password paired")
                 self.destroy()
                 return
-            self._encryptor = encrypt.Encryptor(password,
+            self._encryptor = encrypt.Encryptor(user['password'],
                                                 self._config['method'])
             self._stage = STAGE_ADDR
             if not data:
