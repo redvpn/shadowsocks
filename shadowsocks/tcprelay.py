@@ -420,7 +420,7 @@ class TCPRelayHandler(object):
             auth_header = self._vendor_encryptor.decrypt(auth_header)
             data = self._auth_header_buffer[length:]
             self._auth_header_buffer = None
-            if auth_header[0] != '\x00':
+            if auth_header[0] != 0 and auth_header[0] != '\x00':
                 logging.warn("unknown protocol version")
                 self.destroy()
                 return
