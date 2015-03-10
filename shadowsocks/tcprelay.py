@@ -115,7 +115,7 @@ class TCPRelayHandler(object):
             self._encryptor = encrypt.Encryptor(config['password'],
                                                 config['method'])
         self._vendor_encryptor = encrypt.Encryptor(
-                self._config['vendor_password'],
+                self._config['vendor_key'],
                 self._config['method'])
         self._fastopen_connected = False
         self._auth_header_buffer = b''

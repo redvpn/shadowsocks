@@ -93,8 +93,8 @@ def check_config(config, is_local):
         print_help(is_local)
         sys.exit(2)
 
-    if is_local and not config.get('vendor_password', None):
-        logging.error('vendor password not specified')
+    if not config.get('vendor_key', None):
+        logging.error('vendor key not specified')
         print_help(is_local)
         sys.exit(2)
 
@@ -133,7 +133,7 @@ def check_config(config, is_local):
         logging.warn('warning: your timeout %d seems too long' %
                      int(config.get('timeout')))
     if config.get('password') in [b'mypassword'] or \
-            config.get('vendor_password') in [b'vendorkey']:
+            config.get('vendor_key') in [b'vendorkey']:
         logging.error('DON\'T USE DEFAULT PASSWORD! Please change it in your '
                       'config.json!')
         sys.exit(1)
@@ -187,7 +187,7 @@ def get_config(is_local):
             elif key == '-k':
                 config['password'] = to_bytes(value)
             elif key == '-K':
-                config['vendor_password'] = to_bytes(value)
+                config['vendor_key'] = to_bytes(value)
             elif key == '-l':
                 config['local_port'] = int(value)
             elif key == '-s':
@@ -241,7 +241,7 @@ def get_config(is_local):
     config['username'] = config.get('username', b'')
     config['password'] = to_bytes(config.get('password', b''))
     config['method'] = to_str(config.get('method', 'aes-256-cfb'))
-    config['vendor_password'] = to_bytes(config.get('vendor_password', b''))
+    config['vendor_key'] = to_bytes(config.get('vendor_key', b''))
     config['port_password'] = config.get('port_password', None)
     config['users-file'] = config.get('users-file', None)
     config['timeout'] = int(config.get('timeout', 300))
